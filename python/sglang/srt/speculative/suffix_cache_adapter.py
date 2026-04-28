@@ -264,7 +264,7 @@ class SuffixCacheAdapter:
         logger.info("[SUFFIX ADAPTER] Cache reset")
 
     def _reorder_tree_bfs(
-        self, token_ids: List[int], parents: List[Optional[int]]
+        self, token_ids: List[int], parents: List[int]
     ) -> Tuple[List[int], List[int]]:
         """
         Reorder nodes so parents always precede their descendants.

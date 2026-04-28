@@ -33,9 +33,9 @@ class SuffixVerifyInput(NgramVerifyInput):
         draft_token: torch.Tensor,
         tree_mask: torch.Tensor,
         positions: torch.Tensor,
-        retrive_index: torch.Tensor,
-        retrive_next_token: torch.Tensor,
-        retrive_next_sibling: torch.Tensor,
+        retrieve_index: torch.Tensor,
+        retrieve_next_token: torch.Tensor,
+        retrieve_next_sibling: torch.Tensor,
         draft_token_num: int,
     ):
         # Call parent init to reuse all initialization logic
@@ -43,9 +43,9 @@ class SuffixVerifyInput(NgramVerifyInput):
             draft_token,
             tree_mask,
             positions,
-            retrive_index,
-            retrive_next_token,
-            retrive_next_sibling,
+            retrieve_index,
+            retrieve_next_token,
+            retrieve_next_sibling,
             draft_token_num,
         )
         # Override to set correct SpecInputType for suffix decoding
