@@ -2456,6 +2456,19 @@ class ModelRunner(ModelRunnerKVCacheMixin):
                     draft_token_num=num_tokens_per_bs,
                 )
                 spec_info.capture_hidden_mode = CaptureHiddenMode.NULL
+            elif self.spec_algorithm.is_suffix():
+                from sglang.srt.speculative.suffix_info import SuffixVerifyInput
+
+                spec_info = SuffixVerifyInput(
+                    draft_token=None,
+                    tree_mask=buffers.custom_mask,
+                    positions=None,
+                    retrive_index=None,
+                    retrive_next_token=None,
+                    retrive_next_sibling=None,
+                    draft_token_num=num_tokens_per_bs,
+                )
+                spec_info.capture_hidden_mode = CaptureHiddenMode.NULL
 
             return spec_info
 

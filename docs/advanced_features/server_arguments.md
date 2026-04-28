@@ -276,7 +276,7 @@ Please consult the documentation below and [server_args.py](https://github.com/s
 ## Speculative decoding
 | Argument | Description | Defaults | Options |
 | --- | --- | --- | --- |
-| `--speculative-algorithm` | Speculative algorithm. | `None` | `EAGLE`, `EAGLE3`, `NEXTN`, `STANDALONE`, `NGRAM` |
+| `--speculative-algorithm` | Speculative algorithm. | `None` | `DFLASH`, `EAGLE`, `EAGLE3`, `NEXTN`, `STANDALONE`, `NGRAM`, `SUFFIX` |
 | `--speculative-draft-model-path`<br>`--speculative-draft-model` | The path of the draft model weights. This can be a local folder or a Hugging Face repo ID. | `None` | Type: str |
 | `--speculative-draft-model-revision` | The specific draft model version to use. It can be a branch name, a tag name, or a commit id. If unspecified, will use the default version. | `None` | Type: str |
 | `--speculative-draft-load-format` | The format of the draft model weights to load. If not specified, will use the same format as --load-format. Use 'dummy' to initialize draft model weights with random values for profiling. | `None` | Same as --load-format options |
@@ -300,6 +300,14 @@ Please consult the documentation below and [server_args.py](https://github.com/s
 | `--speculative-ngram-match-type` | Ngram tree-building mode. `BFS` selects recency-based expansion and `PROB` selects frequency-based expansion. This setting is forwarded to the ngram cache implementation. | `BFS` | `BFS`, `PROB` |
 | `--speculative-ngram-max-trie-depth` | Maximum suffix length stored and matched by the ngram trie. | `18` | Type: int |
 | `--speculative-ngram-capacity` | The cache capacity for ngram speculative decoding. | `10000000` | Type: int |
+
+## Suffix speculative decoding
+| Argument | Description | Defaults | Options |
+| --- | --- | --- | --- |
+| `--speculative-suffix-max-tree-depth` | The maximum depth of the suffix decoding global and prompt trees. | `24` | Type: int |
+| `--speculative-suffix-max-cached-requests` | Maximum cached requests for suffix decoding. Use `-1` for unlimited and `0` to disable the global cache. | `10000` | Type: int |
+| `--speculative-suffix-max-spec-factor` | The maximum speculation factor for suffix decoding. | `1.0` | Type: float |
+| `--speculative-suffix-min-token-prob` | The minimum token probability threshold for suffix decoding. | `0.1` | Type: float |
 
 ## Multi-layer Eagle speculative decoding
 | Argument | Description | Defaults | Options |

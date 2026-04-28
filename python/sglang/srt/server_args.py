@@ -45,6 +45,7 @@ from sglang.srt.utils.common import (
     get_quantization_config,
     has_fp8_weights_in_checkpoint,
     human_readable_int,
+    is_arctic_inference_available,
     is_blackwell_supported,
     is_cpu,
     is_cuda,
@@ -530,6 +531,10 @@ class ServerArgs:
     speculative_ngram_external_corpus_path: Optional[str] = None
     speculative_ngram_external_sam_budget: int = 0
     speculative_ngram_external_corpus_max_tokens: int = 10000000
+    speculative_suffix_max_tree_depth: int = 24
+    speculative_suffix_max_cached_requests: int = 10000
+    speculative_suffix_max_spec_factor: float = 1.0
+    speculative_suffix_min_token_prob: float = 0.1
     enable_multi_layer_eagle: bool = False
 
     # Expert parallelism
@@ -3528,6 +3533,62 @@ class ServerArgs:
                     "Currently ngram speculative decoding does not support dp attention."
                 )
 
+        if self.speculative_algorithm == "SUFFIX":
+            if not is_arctic_inference_available():
+                raise ImportError(
+                    "Arctic Inference is required for suffix decoding. "
+                    "Install via: pip install arctic-inference==0.1.1"
+                )
+
+            if not self.device.startswith("cuda"):
+                raise ValueError("Suffix decoding only supports CUDA device.")
+
+            if self.max_running_requests is None:
+                self.max_running_requests = 48
+                logger.warning(
+                    "Max running requests is reset to 48 for suffix decoding. You can override this by explicitly setting --max-running-requests."
+                )
+
+            self.disable_overlap_schedule = True
+            self.enable_mixed_chunk = False
+            if self.speculative_num_draft_tokens is None:
+                self.speculative_num_draft_tokens = (
+                    self.speculative_suffix_max_tree_depth
+                )
+                logger.warning(
+                    "speculative_num_draft_tokens is set to speculative_suffix_max_tree_depth "
+                    f"({self.speculative_suffix_max_tree_depth}) by default for suffix decoding. "
+                    "You can override this by explicitly setting --speculative-num-draft-tokens."
+                )
+            logger.warning(
+                "The overlap scheduler and mixed chunked prefill are disabled because of "
+                "using suffix decoding."
+            )
+
+            if self.speculative_suffix_max_tree_depth < 1:
+                raise ValueError(
+                    f"speculative_suffix_max_tree_depth={self.speculative_suffix_max_tree_depth} must be >= 1"
+                )
+            if self.speculative_suffix_max_cached_requests < -1:
+                raise ValueError(
+                    "speculative_suffix_max_cached_requests="
+                    f"{self.speculative_suffix_max_cached_requests} must be >= -1"
+                )
+            if self.speculative_suffix_max_spec_factor < 0:
+                raise ValueError(
+                    "speculative_suffix_max_spec_factor="
+                    f"{self.speculative_suffix_max_spec_factor} must be >= 0"
+                )
+            if not 0 <= self.speculative_suffix_min_token_prob <= 1:
+                raise ValueError(
+                    "speculative_suffix_min_token_prob="
+                    f"{self.speculative_suffix_min_token_prob} must be in [0, 1]"
+                )
+            if self.enable_dp_attention:
+                raise ValueError(
+                    "Currently suffix decoding does not support dp attention."
+                )
+
         if self.speculative_adaptive:
             from sglang.srt.speculative.adaptive_spec_params import (
                 adaptive_unsupported_reason,
@@ -5236,7 +5297,15 @@ class ServerArgs:
         parser.add_argument(
             "--speculative-algorithm",
             type=str,
-            choices=["DFLASH", "EAGLE", "EAGLE3", "NEXTN", "STANDALONE", "NGRAM"],
+            choices=[
+                "DFLASH",
+                "EAGLE",
+                "EAGLE3",
+                "NEXTN",
+                "STANDALONE",
+                "NGRAM",
+                "SUFFIX",
+            ],
             help="Speculative algorithm.",
         )
         parser.add_argument(
@@ -5397,6 +5466,30 @@ class ServerArgs:
             type=int,
             default=ServerArgs.speculative_ngram_external_corpus_max_tokens,
             help="Fail startup if the tokenized external ngram corpus exceeds this many tokens. Tune this based on your CPU memory budget.",
+        )
+        parser.add_argument(
+            "--speculative-suffix-max-tree-depth",
+            type=int,
+            default=ServerArgs.speculative_suffix_max_tree_depth,
+            help="The maximum depth of the suffix decoding global and prompt trees.",
+        )
+        parser.add_argument(
+            "--speculative-suffix-max-cached-requests",
+            type=int,
+            default=ServerArgs.speculative_suffix_max_cached_requests,
+            help="The maximum number of requests cached for suffix decoding. Use -1 for unlimited and 0 to disable the global cache.",
+        )
+        parser.add_argument(
+            "--speculative-suffix-max-spec-factor",
+            type=float,
+            default=ServerArgs.speculative_suffix_max_spec_factor,
+            help="The maximum speculation factor for suffix decoding.",
+        )
+        parser.add_argument(
+            "--speculative-suffix-min-token-prob",
+            type=float,
+            default=ServerArgs.speculative_suffix_min_token_prob,
+            help="The minimum token probability threshold for suffix decoding.",
         )
         parser.add_argument(
             "--speculative-adaptive",

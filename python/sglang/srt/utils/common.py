@@ -3580,6 +3580,11 @@ def is_triton_kernels_available() -> bool:
 
 
 @lru_cache(maxsize=1)
+def is_arctic_inference_available() -> bool:
+    return importlib.util.find_spec("arctic_inference") is not None
+
+
+@lru_cache(maxsize=1)
 def get_nvidia_driver_version() -> tuple:
     """Return the NVIDIA driver version as a tuple of ints, e.g. (595, 58, 3).
     Returns (0,) on failure."""
