@@ -88,6 +88,7 @@ class CacheAgnosticPolicy(Enum):
     """Scheduling policies that are not aware of the tree cache."""
 
     FCFS = "fcfs"  # first come first serve
+    CONTINUUM = "continuum"  # pinned request first, then FCFS
     LOF = "lof"  # longest output first
     RANDOM = "random"
     ROUTING_KEY = "routing-key"  # prioritize by routing key frequency in running batch

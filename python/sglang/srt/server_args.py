@@ -349,6 +349,11 @@ class ServerArgs:
     max_prefill_tokens: int = 16384
     prefill_max_requests: Optional[int] = None
     schedule_policy: str = "fcfs"
+
+    # Continuum-style scheduling (request-level pinning).
+    # When enabled, any detected tool call can pin the current request for
+    # a short time window to improve cache locality.
+    continuum_pin_seconds: float = 3.0
     enable_priority_scheduling: bool = False
     disable_priority_preemption: bool = False
     default_priority_value: Optional[int] = None
