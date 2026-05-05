@@ -1378,6 +1378,15 @@ class OpenAIServingChat(OpenAIServingBase):
             # Mark that this choice has tool calls
             has_tool_calls[index] = True
 
+            # Continuum pin: any detected tool call pins the current request.
+            rid = content["meta_info"]["id"]
+            if self.tokenizer_manager.server_args.schedule_policy == "continuum":
+                self.tokenizer_manager.scheduler.continuum_pin_request(
+                    rid=rid,
+                    seconds=self.tokenizer_manager.server_args.continuum_pin_seconds,
+                    min_protected_len=0,
+                )
+
             # Tool call ID should be generated only once per tool call
             if call_item.name:
                 # First chunk: include ID and function name

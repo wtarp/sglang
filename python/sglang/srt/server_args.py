@@ -6152,6 +6152,7 @@ class ServerArgs:
         if self.enable_priority_scheduling:
             assert self.schedule_policy in [
                 "fcfs",
+                "continuum",
                 "lof",
             ], f"To use priority scheduling, schedule_policy must be 'fcfs' or 'lof'. '{self.schedule_policy}' is not supported."
             if self.default_priority_value is None:

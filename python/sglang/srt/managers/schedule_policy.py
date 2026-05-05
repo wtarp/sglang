@@ -118,7 +118,7 @@ class SchedulePolicy:
     def calc_priority(
         self, waiting_queue: List[Req], running_batch: Optional[ScheduleBatch] = None
     ) -> bool:
-        if self.policy == CacheAgnosticPolicy.FCFS:
+        if self.policy in (CacheAgnosticPolicy.FCFS, CacheAgnosticPolicy.CONTINUUM):
             if self.enable_priority_scheduling:
                 SchedulePolicy._sort_by_priority_and_fcfs(
                     waiting_queue, self.priority_sign

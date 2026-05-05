@@ -79,6 +79,7 @@ from sglang.srt.layers.moe import initialize_moe_config
 from sglang.srt.layers.quantization.fp4_utils import initialize_fp4_gemm_config
 from sglang.srt.layers.quantization.fp8_utils import initialize_fp8_gemm_config
 from sglang.srt.lora.lora_overlap_loader import LoRAOverlapLoader
+from sglang.srt.managers.continuum_pin_manager import ContinuumPinManager
 from sglang.srt.managers.hisparse_coordinator import HiSparseCoordinator
 from sglang.srt.managers.io_struct import (
     AbortReq,
@@ -858,6 +859,18 @@ class Scheduler(
         self.session_controller = SessionController(self.tree_cache)
         self.forward_sleep_time = None
         self._engine_paused = False
+
+        # Continuum-style request-level pin state.
+        self.continuum_pin_manager = ContinuumPinManager()
+
+    def continuum_pin_request(
+        self, rid: str, seconds: float, min_protected_len: int
+    ) -> None:
+        self.continuum_pin_manager.pin(
+            rid=rid,
+            seconds=seconds,
+            min_protected_len=min_protected_len,
+        )
 
     def init_chunked_prefill(self):
         self.chunked_prefill_size = self.server_args.chunked_prefill_size
@@ -2324,6 +2337,9 @@ class Scheduler(
     def _get_new_batch_prefill_raw(
         self, prefill_delayer_single_pass: Optional[PrefillDelayerSinglePassExecutor]
     ) -> Optional[ScheduleBatch]:
+        # Clean up expired Continuum pins.
+        self.continuum_pin_manager.unpin_expired()
+
         # Check if the grammar is ready in the grammar queue
         if self.grammar_manager.has_waiting_grammars():
             ready_grammar_requests = self.grammar_manager.get_ready_grammar_requests()
@@ -2359,6 +2375,19 @@ class Scheduler(
 
         # Get priority queue
         self.policy.calc_priority(self.waiting_queue, self.running_batch)
+
+        if self.schedule_policy == "continuum" and self.waiting_queue:
+            pinned_waiting = [
+                req
+                for req in self.waiting_queue
+                if self.continuum_pin_manager.is_pinned(req.rid)
+            ]
+            if pinned_waiting:
+                pinned_set = {req.rid for req in pinned_waiting}
+                unpinned_waiting = [
+                    req for req in self.waiting_queue if req.rid not in pinned_set
+                ]
+                self.waiting_queue = pinned_waiting + unpinned_waiting
 
         if TEST_RETRACT and running_bs > TEST_RETRACT_NO_PREFILL_BS:
             # If we are testing retraction and the running batch size exceeds
