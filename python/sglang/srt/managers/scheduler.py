@@ -95,6 +95,7 @@ from sglang.srt.managers.io_struct import (
     ClearHiCacheReqOutput,
     CloseSessionReqInput,
     ContinueGenerationReqInput,
+    ContinuumPinReqInput,
     DestroyWeightsUpdateGroupReqInput,
     DetachHiCacheStorageReqInput,
     DetachHiCacheStorageReqOutput,
@@ -1254,6 +1255,7 @@ class Scheduler(
                 (FreezeGCReq, self.handle_freeze_gc),
                 (GetInternalStateReq, self.get_internal_state),
                 (SetInternalStateReq, self.set_internal_state),
+                (ContinuumPinReqInput, self.handle_continuum_pin_request),
                 (RpcReqInput, self.handle_rpc_request),
                 (ExpertDistributionReq, self.expert_distribution_handle),
                 (LoadLoRAAdapterReqInput, self.load_lora_adapter),
@@ -1268,6 +1270,15 @@ class Scheduler(
                 (ContinueGenerationReqInput, self.continue_generation),
                 (DumperControlReqInput, self.handle_dumper_control),
             ]
+        )
+
+    def handle_continuum_pin_request(self, req: ContinuumPinReqInput) -> None:
+        if not isinstance(req.rid, str) or not req.rid:
+            return
+        self.continuum_pin_request(
+            rid=req.rid,
+            seconds=req.seconds,
+            min_protected_len=req.min_protected_len,
         )
 
     def _abort_on_running_timeout(self):

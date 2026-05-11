@@ -3976,12 +3976,20 @@ class ServerArgs:
                 "lpm",
                 "random",
                 "fcfs",
+                "continuum",
                 "dfs-weight",
                 "lof",
                 "priority",
                 "routing-key",
             ],
             help="The scheduling policy of the requests.",
+        )
+        parser.add_argument(
+            "--continuum-pin-seconds",
+            type=float,
+            default=ServerArgs.continuum_pin_seconds,
+            help="Pin duration in seconds when using --schedule-policy continuum. "
+            "Any detected tool call pins the current request for this duration.",
         )
         parser.add_argument(
             "--enable-priority-scheduling",
@@ -6154,7 +6162,10 @@ class ServerArgs:
                 "fcfs",
                 "continuum",
                 "lof",
-            ], f"To use priority scheduling, schedule_policy must be 'fcfs' or 'lof'. '{self.schedule_policy}' is not supported."
+            ], (
+                "To use priority scheduling, schedule_policy must be 'fcfs', "
+                f"'continuum', or 'lof'. '{self.schedule_policy}' is not supported."
+            )
             if self.default_priority_value is None:
                 logger.warning(
                     "--default-priority-value is not set while --enable-priority-scheduling is enabled. "

@@ -48,7 +48,7 @@ from sglang.srt.function_call.core_types import ToolCallItem
 from sglang.srt.function_call.function_call_parser import FunctionCallParser
 from sglang.srt.function_call.json_array_parser import JsonArrayParser
 from sglang.srt.function_call.utils import get_json_schema_constraint
-from sglang.srt.managers.io_struct import GenerateReqInput
+from sglang.srt.managers.io_struct import ContinuumPinReqInput, GenerateReqInput
 from sglang.srt.parser.conversation import generate_chat_conv
 from sglang.srt.parser.jinja_template_utils import process_content_for_template_format
 from sglang.srt.parser.reasoning_parser import ReasoningParser
@@ -646,6 +646,7 @@ class OpenAIServingChat(OpenAIServingBase):
         n_prev_tokens = {}
         has_tool_calls = {}
         finish_reasons = {}
+        continuum_pin_sent: set[str] = set()
 
         # Usage tracking
         prompt_tokens = {}
@@ -775,6 +776,7 @@ class OpenAIServingChat(OpenAIServingBase):
                         content,
                         request,
                         has_tool_calls,
+                        continuum_pin_sent,
                         continuous_usage_stats,
                     ):
                         if chunk:
@@ -947,6 +949,7 @@ class OpenAIServingChat(OpenAIServingBase):
     ) -> Union[ChatCompletionResponse, ORJSONResponse]:
         """Build chat completion response from generation results"""
         choices = []
+        continuum_pin_sent: set[str] = set()
 
         # Build sglext at response level (from first ret_item, as these are per-request)
         first_ret = ret[0]
@@ -1012,6 +1015,21 @@ class OpenAIServingChat(OpenAIServingBase):
                     request.tool_choice,
                     history_tool_calls_cnt,
                 )
+                if (
+                    tool_calls
+                    and self.tokenizer_manager.server_args.schedule_policy
+                    == "continuum"
+                ):
+                    rid = ret_item["meta_info"]["id"]
+                    if rid not in continuum_pin_sent:
+                        self.tokenizer_manager.send_to_scheduler.send_pyobj(
+                            ContinuumPinReqInput(
+                                rid=rid,
+                                seconds=self.tokenizer_manager.server_args.continuum_pin_seconds,
+                                min_protected_len=0,
+                            )
+                        )
+                        continuum_pin_sent.add(rid)
 
             choice_data = ChatCompletionResponseChoice(
                 index=idx,
@@ -1321,6 +1339,7 @@ class OpenAIServingChat(OpenAIServingBase):
         content: Dict[str, Any],
         request: ChatCompletionRequest,
         has_tool_calls: Dict[int, bool],
+        continuum_pin_sent: set[str],
         continuous_usage_stats: bool = False,
     ):
         """Process tool calls in streaming response"""
@@ -1380,12 +1399,18 @@ class OpenAIServingChat(OpenAIServingBase):
 
             # Continuum pin: any detected tool call pins the current request.
             rid = content["meta_info"]["id"]
-            if self.tokenizer_manager.server_args.schedule_policy == "continuum":
-                self.tokenizer_manager.scheduler.continuum_pin_request(
-                    rid=rid,
-                    seconds=self.tokenizer_manager.server_args.continuum_pin_seconds,
-                    min_protected_len=0,
+            if (
+                self.tokenizer_manager.server_args.schedule_policy == "continuum"
+                and rid not in continuum_pin_sent
+            ):
+                self.tokenizer_manager.send_to_scheduler.send_pyobj(
+                    ContinuumPinReqInput(
+                        rid=rid,
+                        seconds=self.tokenizer_manager.server_args.continuum_pin_seconds,
+                        min_protected_len=0,
+                    )
                 )
+                continuum_pin_sent.add(rid)
 
             # Tool call ID should be generated only once per tool call
             if call_item.name:

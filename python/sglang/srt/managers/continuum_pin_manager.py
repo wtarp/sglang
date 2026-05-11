@@ -38,10 +38,16 @@ class ContinuumPinManager:
         now = time.time()
         expires_at = now + max(seconds, 0.0)
         prev = self._pinned.get(rid)
-        if prev is None or expires_at > prev.expires_at or min_protected_len > prev.min_protected_len:
+        if (
+            prev is None
+            or expires_at > prev.expires_at
+            or min_protected_len > prev.min_protected_len
+        ):
             self._pinned[rid] = PinInfo(
                 expires_at=expires_at,
-                min_protected_len=max(min_protected_len, prev.min_protected_len if prev else 0),
+                min_protected_len=max(
+                    min_protected_len, prev.min_protected_len if prev else 0
+                ),
             )
             return True
         return False
@@ -52,4 +58,3 @@ class ContinuumPinManager:
         for rid in expired:
             self._pinned.pop(rid, None)
         return expired
-

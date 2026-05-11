@@ -1511,6 +1511,14 @@ class SetInternalStateReqOutput(BaseReq):
 
 
 @dataclass
+class ContinuumPinReqInput(BaseReq):
+    """Request-level pin signal for Continuum-style scheduling."""
+
+    seconds: float = 0.0
+    min_protected_len: int = 0
+
+
+@dataclass
 class ProfileReqInput(BaseReq):
     # The output directory
     output_dir: Optional[str] = None
