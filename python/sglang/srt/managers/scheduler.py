@@ -874,6 +874,16 @@ class Scheduler(
         if node is None:
             return
 
+        expired = self.continuum_pin_manager.pop_if_expired(node)
+        if expired is not None:
+            if self.tree_cache.supports_swa() and self.tree_cache.is_tree_cache():
+                self.tree_cache.dec_lock_ref(
+                    expired.node,
+                    DecLockRefParams(swa_uuid_for_lock=expired.swa_uuid_for_lock),
+                )
+            else:
+                self.tree_cache.dec_lock_ref(expired.node)
+
         pin_info = self.continuum_pin_manager.get_pin_info_by_node(node)
         swa_uuid_for_lock = pin_info.swa_uuid_for_lock if pin_info else None
         if pin_info is None:

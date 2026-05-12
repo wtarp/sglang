@@ -29,20 +29,23 @@ class ContinuumPinManager:
         info = self._pinned.get(id(node))
         if info is None:
             return False
-        if time.time() >= info.expires_at:
-            self._pinned.pop(id(node), None)
-            return False
-        return True
+        return time.time() < info.expires_at
 
     def get_pin_info_by_node(self, node: Any) -> PinInfo | None:
         node_key = id(node)
         info = self._pinned.get(node_key)
         if info is None:
             return None
-        if time.time() >= info.expires_at:
-            self._pinned.pop(node_key, None)
+        return info if time.time() < info.expires_at else None
+
+    def pop_if_expired(self, node: Any) -> PinInfo | None:
+        node_key = id(node)
+        info = self._pinned.get(node_key)
+        if info is None:
             return None
-        return info
+        if time.time() < info.expires_at:
+            return None
+        return self._pinned.pop(node_key, None)
 
     def pin_node(
         self,
