@@ -874,7 +874,8 @@ class Scheduler(
         if node is None:
             return
 
-        expired = self.continuum_pin_manager.pop_if_expired(node)
+        now = time.time()
+        expired = self.continuum_pin_manager.pop_if_expired(node, now=now)
         if expired is not None:
             if self.tree_cache.supports_swa() and self.tree_cache.is_tree_cache():
                 self.tree_cache.dec_lock_ref(
@@ -884,7 +885,7 @@ class Scheduler(
             else:
                 self.tree_cache.dec_lock_ref(expired.node)
 
-        pin_info = self.continuum_pin_manager.get_pin_info_by_node(node)
+        pin_info = self.continuum_pin_manager.get_pin_info_by_node(node, now=now)
         swa_uuid_for_lock = pin_info.swa_uuid_for_lock if pin_info else None
         if pin_info is None:
             inc_result = self.tree_cache.inc_lock_ref(node)
@@ -895,6 +896,7 @@ class Scheduler(
             node=node,
             seconds=seconds,
             min_protected_len=min_protected_len,
+            now=now,
             swa_uuid_for_lock=swa_uuid_for_lock,
         )
 
@@ -2395,7 +2397,8 @@ class Scheduler(
         self, prefill_delayer_single_pass: Optional[PrefillDelayerSinglePassExecutor]
     ) -> Optional[ScheduleBatch]:
         # Clean up expired Continuum pins.
-        for info in self.continuum_pin_manager.pop_expired():
+        now = time.time()
+        for info in self.continuum_pin_manager.pop_expired(now=now):
             if self.tree_cache.supports_swa() and self.tree_cache.is_tree_cache():
                 self.tree_cache.dec_lock_ref(
                     info.node,
@@ -2404,7 +2407,6 @@ class Scheduler(
             else:
                 self.tree_cache.dec_lock_ref(info.node)
 
-        now = time.time()
         for rid, (ts, _) in list(self._continuum_recent_last_node.items()):
             if now - ts > self._continuum_recent_last_node_ttl_s:
                 self._continuum_recent_last_node.pop(rid, None)

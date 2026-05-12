@@ -25,25 +25,34 @@ class ContinuumPinManager:
         # key: id(node)
         self._pinned: dict[int, PinInfo] = {}
 
-    def is_pinned_node(self, node: Any) -> bool:
+    @staticmethod
+    def _coalesce_now(now: float | None) -> float:
+        return time.time() if now is None else now
+
+    def is_pinned_node(self, node: Any, *, now: float | None = None) -> bool:
         info = self._pinned.get(id(node))
         if info is None:
             return False
-        return time.time() < info.expires_at
+        now = self._coalesce_now(now)
+        return now < info.expires_at
 
-    def get_pin_info_by_node(self, node: Any) -> PinInfo | None:
+    def get_pin_info_by_node(
+        self, node: Any, *, now: float | None = None
+    ) -> PinInfo | None:
         node_key = id(node)
         info = self._pinned.get(node_key)
         if info is None:
             return None
-        return info if time.time() < info.expires_at else None
+        now = self._coalesce_now(now)
+        return info if now < info.expires_at else None
 
-    def pop_if_expired(self, node: Any) -> PinInfo | None:
+    def pop_if_expired(self, node: Any, *, now: float | None = None) -> PinInfo | None:
         node_key = id(node)
         info = self._pinned.get(node_key)
         if info is None:
             return None
-        if time.time() < info.expires_at:
+        now = self._coalesce_now(now)
+        if now < info.expires_at:
             return None
         return self._pinned.pop(node_key, None)
 
@@ -53,13 +62,14 @@ class ContinuumPinManager:
         seconds: float,
         min_protected_len: int,
         *,
+        now: float | None = None,
         swa_uuid_for_lock: str | None = None,
     ) -> bool:
         """Pin a cache node for `seconds`.
 
         Returns True if this call changed the pin state.
         """
-        now = time.time()
+        now = self._coalesce_now(now)
         expires_at = now + max(seconds, 0.0)
         node_key = id(node)
         prev = self._pinned.get(node_key)
@@ -80,8 +90,8 @@ class ContinuumPinManager:
             return True
         return False
 
-    def pop_expired(self) -> list[PinInfo]:
-        now = time.time()
+    def pop_expired(self, *, now: float | None = None) -> list[PinInfo]:
+        now = self._coalesce_now(now)
         expired_keys = [k for k, info in self._pinned.items() if now >= info.expires_at]
         expired_infos: list[PinInfo] = []
         for k in expired_keys:
