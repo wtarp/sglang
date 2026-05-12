@@ -182,6 +182,7 @@ from sglang.srt.managers.scheduler_update_weights_mixin import (
 )
 from sglang.srt.managers.session_controller import SessionController
 from sglang.srt.managers.utils import GenerationBatchResult, validate_input_length
+from sglang.srt.mem_cache.base_prefix_cache import DecLockRefParams
 from sglang.srt.mem_cache.cache_init_params import CacheInitParams
 from sglang.srt.mem_cache.common import release_kv_cache
 from sglang.srt.mem_cache.radix_cache import RadixCache
@@ -861,17 +862,52 @@ class Scheduler(
         self.forward_sleep_time = None
         self._engine_paused = False
 
-        # Continuum-style request-level pin state.
+        # Continuum-style cache-node pin state.
         self.continuum_pin_manager = ContinuumPinManager()
+        self._continuum_recent_last_node: dict[str, tuple[float, Any]] = {}
+        self._continuum_recent_last_node_ttl_s = 10.0
 
     def continuum_pin_request(
         self, rid: str, seconds: float, min_protected_len: int
     ) -> None:
-        self.continuum_pin_manager.pin(
-            rid=rid,
+        node = self._get_continuum_pin_node_by_rid(rid)
+        if node is None:
+            return
+
+        pin_info = self.continuum_pin_manager.get_pin_info_by_node(node)
+        swa_uuid_for_lock = pin_info.swa_uuid_for_lock if pin_info else None
+        if pin_info is None:
+            inc_result = self.tree_cache.inc_lock_ref(node)
+            if self.tree_cache.supports_swa() and self.tree_cache.is_tree_cache():
+                swa_uuid_for_lock = inc_result.swa_uuid_for_lock
+
+        self.continuum_pin_manager.pin_node(
+            node=node,
             seconds=seconds,
             min_protected_len=min_protected_len,
+            swa_uuid_for_lock=swa_uuid_for_lock,
         )
+
+    def _get_continuum_pin_node_by_rid(self, rid: str) -> Any | None:
+        if not self.running_batch.is_empty():
+            for req in self.running_batch.reqs:
+                if req.rid == rid and req.last_node is not None:
+                    self._continuum_recent_last_node[rid] = (time.time(), req.last_node)
+                    return req.last_node
+
+        for req in self.waiting_queue:
+            if req.rid == rid and req.last_node is not None:
+                self._continuum_recent_last_node[rid] = (time.time(), req.last_node)
+                return req.last_node
+
+        ts_node = self._continuum_recent_last_node.get(rid)
+        if ts_node is None:
+            return None
+        ts, node = ts_node
+        if time.time() - ts > self._continuum_recent_last_node_ttl_s:
+            self._continuum_recent_last_node.pop(rid, None)
+            return None
+        return node
 
     def init_chunked_prefill(self):
         self.chunked_prefill_size = self.server_args.chunked_prefill_size
@@ -2349,7 +2385,19 @@ class Scheduler(
         self, prefill_delayer_single_pass: Optional[PrefillDelayerSinglePassExecutor]
     ) -> Optional[ScheduleBatch]:
         # Clean up expired Continuum pins.
-        self.continuum_pin_manager.unpin_expired()
+        for info in self.continuum_pin_manager.pop_expired():
+            if self.tree_cache.supports_swa() and self.tree_cache.is_tree_cache():
+                self.tree_cache.dec_lock_ref(
+                    info.node,
+                    DecLockRefParams(swa_uuid_for_lock=info.swa_uuid_for_lock),
+                )
+            else:
+                self.tree_cache.dec_lock_ref(info.node)
+
+        now = time.time()
+        for rid, (ts, _) in list(self._continuum_recent_last_node.items()):
+            if now - ts > self._continuum_recent_last_node_ttl_s:
+                self._continuum_recent_last_node.pop(rid, None)
 
         # Check if the grammar is ready in the grammar queue
         if self.grammar_manager.has_waiting_grammars():
@@ -2388,16 +2436,17 @@ class Scheduler(
         self.policy.calc_priority(self.waiting_queue, self.running_batch)
 
         if self.schedule_policy == "continuum" and self.waiting_queue:
-            pinned_waiting = [
-                req
-                for req in self.waiting_queue
-                if self.continuum_pin_manager.is_pinned(req.rid)
-            ]
+            pinned_waiting: list[Req] = []
+            unpinned_waiting: list[Req] = []
+            for req in self.waiting_queue:
+                if (
+                    req.last_node is not None
+                    and self.continuum_pin_manager.is_pinned_node(req.last_node)
+                ):
+                    pinned_waiting.append(req)
+                else:
+                    unpinned_waiting.append(req)
             if pinned_waiting:
-                pinned_set = {req.rid for req in pinned_waiting}
-                unpinned_waiting = [
-                    req for req in self.waiting_queue if req.rid not in pinned_set
-                ]
                 self.waiting_queue = pinned_waiting + unpinned_waiting
 
         if TEST_RETRACT and running_bs > TEST_RETRACT_NO_PREFILL_BS:
