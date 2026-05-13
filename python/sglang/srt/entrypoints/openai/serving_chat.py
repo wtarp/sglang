@@ -1019,6 +1019,7 @@ class OpenAIServingChat(OpenAIServingBase):
                     tool_calls
                     and self.tokenizer_manager.server_args.schedule_policy
                     == "continuum"
+                    and request.stream
                 ):
                     rid = ret_item["meta_info"]["id"]
                     if rid not in continuum_pin_sent:
