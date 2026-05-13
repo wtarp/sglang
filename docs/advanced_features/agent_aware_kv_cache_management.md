@@ -49,7 +49,7 @@ OpenClaw 上下文窗口有限，当上下文长度超过阈值水位时，会�
 
 - 万全发版版本：龙虾湖
 - 推理引擎：SGLang
-- 目标模型：MiniMax M2.7（Target Model）
+- 目标模型：MiniMax M2.7
 - 硬件要求：CUDA GPU + CPU
 
 ### 1.3 功能描述
