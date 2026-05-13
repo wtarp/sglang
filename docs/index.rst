@@ -49,6 +49,7 @@ Its core features include:
    advanced_features/structured_outputs_for_reasoning_models.ipynb
    advanced_features/tool_parser.ipynb
    advanced_features/separate_reasoning.ipynb
+   advanced_features/agent_aware_kv_cache_management.md
    advanced_features/quantization.md
    advanced_features/quantized_kv_cache.md
    advanced_features/expert_parallelism.md
