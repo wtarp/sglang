@@ -158,7 +158,7 @@ python -m sglang.launch_server \
 ### 3.2 规划中参数（KV Demote）
 
 ```bash
---enable_demote_kv   # 使能 KV cache 降级功能
+--enable-demote-kv   # 使能 KV cache 降级功能
 ```
 
 示例：
@@ -175,7 +175,7 @@ python -m sglang.launch_server \
     --trust-remote-code \
     --speculative-algorithm SUFFIX \
     --speculative-num-draft-tokens 12 \
-    --enable_demote_kv
+    --enable-demote-kv
 ```
 
 ## 四、落地边界与实现状态
@@ -192,7 +192,7 @@ python -m sglang.launch_server \
 - `openclaw_kv_demote` 请求字段解析
 - 被压缩旧上下文子树定位与降级
 - 当前 summarization 请求新增分支降级
-- `--enable_demote_kv` 启动参数及其配套执行路径
+- `--enable-demote-kv` 启动参数及其配套执行路径
 
 ## 五、其他说明
 
