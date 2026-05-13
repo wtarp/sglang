@@ -1394,24 +1394,10 @@ class OpenAIServingChat(OpenAIServingBase):
 
         # Yield tool calls
         history_tool_calls_cnt = self._get_history_tool_calls_cnt(request)
+        rid = content["meta_info"]["id"]
         for call_item in calls:
             # Mark that this choice has tool calls
             has_tool_calls[index] = True
-
-            # Continuum pin: any detected tool call pins the current request.
-            rid = content["meta_info"]["id"]
-            if (
-                self.tokenizer_manager.server_args.schedule_policy == "continuum"
-                and rid not in continuum_pin_sent
-            ):
-                self.tokenizer_manager.send_to_scheduler.send_pyobj(
-                    ContinuumPinReqInput(
-                        rid=rid,
-                        seconds=self.tokenizer_manager.server_args.continuum_pin_seconds,
-                        min_protected_len=0,
-                    )
-                )
-                continuum_pin_sent.add(rid)
 
             # Tool call ID should be generated only once per tool call
             if call_item.name:
@@ -1458,6 +1444,22 @@ class OpenAIServingChat(OpenAIServingBase):
                 )
 
             yield f"data: {chunk.model_dump_json()}\n\n"
+
+        # Continuum pin: pin after tool call arguments are fully streamed, so the
+        # scheduler pins the latest (deepest) `req.last_node`.
+        if (
+            calls
+            and self.tokenizer_manager.server_args.schedule_policy == "continuum"
+            and rid not in continuum_pin_sent
+        ):
+            self.tokenizer_manager.send_to_scheduler.send_pyobj(
+                ContinuumPinReqInput(
+                    rid=rid,
+                    seconds=self.tokenizer_manager.server_args.continuum_pin_seconds,
+                    min_protected_len=0,
+                )
+            )
+            continuum_pin_sent.add(rid)
 
     def _check_for_unstreamed_tool_args(
         self,

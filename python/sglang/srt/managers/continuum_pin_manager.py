@@ -25,6 +25,9 @@ class ContinuumPinManager:
         # key: id(node)
         self._pinned: dict[int, PinInfo] = {}
 
+    def has_pins(self) -> bool:
+        return bool(self._pinned)
+
     @staticmethod
     def _coalesce_now(now: float | None) -> float:
         return time.time() if now is None else now

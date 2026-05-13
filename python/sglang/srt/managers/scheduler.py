@@ -900,6 +900,32 @@ class Scheduler(
             swa_uuid_for_lock=swa_uuid_for_lock,
         )
 
+    def _continuum_promote_pinned_waiting_queue(self) -> None:
+        if self.schedule_policy != "continuum" or not self.waiting_queue:
+            return
+        if not self.continuum_pin_manager.has_pins():
+            return
+
+        # Continuum is cache-agnostic at policy level, so requests in the waiting
+        # queue may not have `last_node` populated yet. We need `last_node` to
+        # promote pinned requests; otherwise pinned-first becomes a no-op.
+        for req in self.waiting_queue:
+            if req.last_node is None:
+                req.init_next_round_input(self.tree_cache)
+
+        now = time.time()
+        pinned_waiting: list[Req] = []
+        unpinned_waiting: list[Req] = []
+        for req in self.waiting_queue:
+            if req.last_node is not None and self.continuum_pin_manager.is_pinned_node(
+                req.last_node, now=now
+            ):
+                pinned_waiting.append(req)
+            else:
+                unpinned_waiting.append(req)
+        if pinned_waiting:
+            self.waiting_queue = pinned_waiting + unpinned_waiting
+
     def _get_continuum_pin_node_by_rid(self, rid: str) -> Any | None:
         if not self.running_batch.is_empty():
             for req in self.running_batch.reqs:
@@ -2447,19 +2473,7 @@ class Scheduler(
         # Get priority queue
         self.policy.calc_priority(self.waiting_queue, self.running_batch)
 
-        if self.schedule_policy == "continuum" and self.waiting_queue:
-            pinned_waiting: list[Req] = []
-            unpinned_waiting: list[Req] = []
-            for req in self.waiting_queue:
-                if (
-                    req.last_node is not None
-                    and self.continuum_pin_manager.is_pinned_node(req.last_node)
-                ):
-                    pinned_waiting.append(req)
-                else:
-                    unpinned_waiting.append(req)
-            if pinned_waiting:
-                self.waiting_queue = pinned_waiting + unpinned_waiting
+        self._continuum_promote_pinned_waiting_queue()
 
         if TEST_RETRACT and running_bs > TEST_RETRACT_NO_PREFILL_BS:
             # If we are testing retraction and the running batch size exceeds
